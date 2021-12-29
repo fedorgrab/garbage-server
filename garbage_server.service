@@ -1,0 +1,10 @@
+After=network.target
+[Service]
+ExecStart=/home/fvgrab/garbage-server/python/bin/python /home/fvgrab/garbage-server/manage.py runserver 
+WorkingDirectory=/home/fvgrab/
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=fvgrab
+[Install]
+WantedBy=multi-user.target

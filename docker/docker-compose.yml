@@ -1,0 +1,12 @@
+version: "3.7"
+
+services:
+
+  backend:
+    build: ./
+    container_name: garbage-server_backend
+    restart: always
+    volumes:
+      - ./data:/data
+    ports:
+      - 80:80
