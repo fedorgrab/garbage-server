@@ -1,13 +1,14 @@
 import typing as t
 import secrets
-import torch
+import numpy as np
+from scipy import stats
 from fastapi import FastAPI, File, UploadFile
 from .model import get_trained_model
-from . import constants
-from . import utils
+import constants
+import utils
 
 app = FastAPI()
-model = get_trained_model()
+classifier = get_trained_model()
 
 
 @app.get("/ping")
@@ -25,6 +26,6 @@ async def predict(files: t.List[UploadFile] = File(...)):
             file_bytes_list.append(file_bytes)
 
     tensor_image_batch = utils.load_images_as_tensor(file_bytes_list)
-    classes = model.predict(tensor_image_batch)
-    pred_class = torch.mode(classes)[0].item()
+    classes = np.argmax(classifier.predict(tensor_image_batch), axis=1)
+    pred_class = stats.mode(classes, axis=None).mode[0]
     return {"class": constants.CLASSES[pred_class]}
