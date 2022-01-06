@@ -1,31 +1,93 @@
-import typing
 import torch
-import torch.nn as nn
-from torchvision import models as torch_models
-from .constants import MODEL_PATH
+from torch import nn
+from torchvision import transforms
+from torch.nn import functional as F
+from pytorch_lightning import LightningModule
+import torchvision.models as models
+#from pytorch_lightning.metrics.functional import accuracy
+from torchmetrics.functional import accuracy
 
-LEARNING_RATE_DEFAULT = 0.001
+NUM_CLASSES_OLD = 6
 
 
-class SequentialNetwork(nn.Module):
-
-    def __init__(self, layers: typing.Sequence[nn.Module]):
+class GarbageClassifier(LightningModule):
+    def __init__(
+        self,
+        learning_rate=0.0001,
+        input_shape=224,
+        num_classes=8,
+        pretrained_from_old=True,
+    ):
         super().__init__()
-        self.layers = nn.Sequential(*layers)
+        # log hyperparameters
+        self.save_hyperparameters()
+        self.learning_rate = learning_rate
+        self.dim = input_shape
+        self.num_classes = num_classes
+        self.criterion = nn.CrossEntropyLoss()
+        self.resnet_model = models.resnet18(pretrained=False)
+
+        for param in self.resnet_model.parameters():
+            param.requires_grad = False
+
+        linear_size = list(self.resnet_model.children())[-1].in_features
+        self.resnet_model.fc = nn.Linear(linear_size, num_classes)
 
     def forward(self, x):
-        return self.layers(x)
+        return self.resnet_model(x)
 
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+
+        # training metrics
+        preds = torch.argmax(logits, dim=1)
+        acc = accuracy(preds, y)
+
+        self.log("train_loss", loss, on_epoch=True, on_step=False, logger=True)
+        self.log("train_acc", acc, on_epoch=True, on_step=False, logger=True)
+
+        return loss
+
+    # logic for a single validation step
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+
+        # validation metrics
+        preds = torch.argmax(logits, dim=1)
+        acc = accuracy(preds, y)
+
+        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_acc", acc, prog_bar=True)
+        return loss
+
+    # logic for a single testing step
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        logits = self(x)
+        loss = self.criterion(logits, y)
+
+        # validation metrics
+        preds = torch.argmax(logits, dim=1)
+        acc = accuracy(preds, y)
+        self.log("test_loss", loss, prog_bar=True)
+        self.log("test_acc", acc, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+    
     def predict(self, x):
         net_out = self(x)
         return torch.max(net_out, 1)[1]
 
 
 def get_trained_model():
-    resnet18 = torch_models.resnet18(pretrained=False)
-    num_ftrs = resnet18.fc.in_features
-    resnet18.fc = nn.Linear(num_ftrs, 6)
-    model = SequentialNetwork([resnet18])
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device("cpu")))
-    model.eval()
-    return model
+    classifier = GarbageClassifier()
+    classifier.load_state_dict(torch.load("model.pt", map_location=torch.device("cpu")))
+    classifier.eval()
+    return classifier
+
