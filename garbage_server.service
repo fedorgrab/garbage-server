@@ -1,10 +1,12 @@
 After=network.target
 [Service]
-ExecStart=/home/fvgrab/garbage-server/python/bin/python /home/fvgrab/garbage-server/manage.py runserver 
-WorkingDirectory=/home/fvgrab/
+Type=simple
+#ExecStart=/home/fvgrab/garbage-server/python/bin/python /home/fvgrab/garbage-server/manage.py runserver 
+ExecStart=/home/fvgrab/garbage-server/python/bin/gunicorn -b 0.0.0.0:80 manage:app -w 2 -k uvicorn.workers.UvicornWorker
+WorkingDirectory=/home/fvgrab/garbage-server
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=fvgrab
+User=root
 [Install]
 WantedBy=multi-user.target
